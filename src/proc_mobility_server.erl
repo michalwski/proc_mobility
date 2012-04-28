@@ -12,7 +12,8 @@
 
 %% API
 -export([start_link/0, 
-         send/3]).
+         send/3,
+		 started/2]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -24,13 +25,15 @@
 
 -include("proc_mobility.hrl").
 -record(pms_state, 
-        {prepared=[], started=[], migrated=[]}).
+        {prepared=[], starting=[]}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 send(Pid, PState, Target) ->
     gen_server:call(?PROCESES_DAEMON, {send, Pid, PState, Target}).
+started(_Pid, Caller) ->
+	gen_server:reply(Caller, ok).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -74,7 +77,7 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({send, Pid, PState, Target}, From, State) when is_record(PState, mproc_state) ->
-    ?INFO_MSG("send request pid ~p to ~p from ~p~n", [Pid, Target, From]),
+    ?INFO_MSG("send request pid ~p to ~p with ~p from ~p~n", [Pid, Target, PState, From]),
     case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Pid, PState}) of
         ok ->
             case gen_server:call({?PROCESES_DAEMON, Target}, {start_proc, Pid}) of
@@ -94,21 +97,29 @@ handle_call({send, _Pid, PState, _Target}, _From, State) ->
 	{reply, {error, state_type_error}, State};
 
 handle_call({prepare_proc, Pid, PState}, From, State) ->
-    ?INFO_MSG("prepareing proc ~p from ~p", [Pid, From]),
+    ?INFO_MSG("Prepareing proc ~p from ~p", [Pid, From]),
 	case proplists:get_value(Pid, State#pms_state.prepared) of
 		undefined ->
 			M = PState#mproc_state.module,
 			S = PState#mproc_state.state,
+			?INFO_MSG("Preparing proces in module ~p with state ~p", [M, S]),
 			Listener = apply(M, init_state, [S]),
-		    {reply, ok, State#pms_state{migrated= State#pms_state.prepared ++ [{Pid, Listener}]}};
+			?INFO_MSG("Proces initiated, listener set ~p", [Listener]),
+		    {reply, ok, State#pms_state{prepared= State#pms_state.prepared ++ [{Pid, Listener}]}};
 		_ ->
 			{reply, {error, already_prepared}, State}
 	end;
 
 handle_call({start_proc, Pid}, From, State) ->
-    ?INFO_MSG("starting proc ~p", [Pid]),
-    Reply = ok,
-    {reply, Reply, State};
+    ?INFO_MSG("Starting proc ~p", [Pid]),
+	case proplists:get_value(Pid, State#pms_state.prepared) of
+		undefined ->
+			{reply, {error, unprepared}, State};
+		Listener ->
+			?INFO_MSG("Running prepared proc ~p ~p", [Listener, From]),
+			run_prepared(Listener, From, Pid),
+			{noreply, State#pms_state.starting ++ [{Listener, From}]}
+	end;
 
 handle_call(Request, From, State) ->
     io:format("unrecognized request ~p from ~p~n", [Request, From]),
@@ -169,3 +180,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+run_prepared(Listener, Caller, Pid) ->
+	Listener ! {mobility, run, Caller, Pid}.

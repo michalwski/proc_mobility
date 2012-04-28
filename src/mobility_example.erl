@@ -40,11 +40,14 @@ start_with_state(State) ->
 
 init_state(State) ->
 	RunListener = fun() ->
+		?INFO_MSG("Running listener ~p", self()),
 		receive
-			{mobility, run, Caller} ->
+			{mobility, run, Caller, Pid} ->
 				Status = start_with_state(State),
-				Caller ! {mobility, running, Status}
-			end
+				?INFO_MSG("started with state ~p and got ~p", [State, Status]),
+				proc_mobility_server:started(Pid, Caller)
+		end,
+		?INFO_MSG("Listern finished")
 	end,
 	spawn(RunListener).
 
@@ -64,7 +67,8 @@ send_me(Destination) ->
 %%          {stop, Reason}
 %% --------------------------------------------------------------------
 init([]) ->
-    {ok, #state{}};
+	?INFO_MSG("Starting"),
+    {ok, {ala, ma, kota}};
 
 init({mobility, State}) ->
 	{ok, State}.
@@ -80,7 +84,7 @@ init({mobility, State}) ->
 %% --------------------------------------------------------------------
 
 handle_call({mobility, send_me, Destination}, From, State) ->
-	case proc_mobility_server:send(?MODULE, State, Destination) of
+	case proc_mobility_server:send(?MODULE, #mproc_state{module=?MODULE, state=State}, Destination) of
 		ok ->
 			{stop, migrated, ok, State};
 		Result -> 
