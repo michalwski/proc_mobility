@@ -75,11 +75,15 @@ init([]) ->
 %%--------------------------------------------------------------------
 handle_call({send, Pid, PState, Target}, From, State) ->
     ?INFO("send request pid ~p to ~p from ~p~n", [Pid, Target, From]),
-    %%TODO check if call can be done by caller
     case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Pid, PState}) of
         ok ->
-            ok = gen_server:call({?PROCESES_DAEMON, Target}, {start_proc, Pid}),
-            {reply, ok, State#pms_state{migrated= State#pms_state.migrated ++ [Pid]}};
+            case gen_server:call({?PROCESES_DAEMON, Target}, {start_proc, Pid}) of
+				ok -> {reply, ok, State#pms_state{migrated= State#pms_state.migrated ++ [Pid]}};
+				_ -> 
+					%%TODO log problem
+					gen_server:call({?PROCESES_DAEMON, Target}, {clean_up, Pid}),
+					{reply, false, State}
+			end;
         _ ->
             %%TODO log problem
             {reply, false, State}
