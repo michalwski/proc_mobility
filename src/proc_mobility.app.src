@@ -1,0 +1,13 @@
+{application, proc_mobility,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  sasl
+                 ]},
+  {mod, { proc_mobility_app, []}},
+  {env, []}
+ ]}.

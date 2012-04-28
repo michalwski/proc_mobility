@@ -117,7 +117,7 @@ handle_info(Info, State) ->
 %% Returns: any (ignored by gen_server)
 %% --------------------------------------------------------------------
 terminate(Reason, State) ->
-	?INFO("proces terminated with reason ~p and state ~p", [Reason, State]),
+	?INFO_MSG("proces terminated with reason ~p and state ~p", [Reason, State]),
     ok.
 
 %% --------------------------------------------------------------------

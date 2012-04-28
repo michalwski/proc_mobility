@@ -73,29 +73,43 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({send, Pid, PState, Target}, From, State) ->
-    ?INFO("send request pid ~p to ~p from ~p~n", [Pid, Target, From]),
+handle_call({send, Pid, PState, Target}, From, State) when is_record(PState, mproc_state) ->
+    ?INFO_MSG("send request pid ~p to ~p from ~p~n", [Pid, Target, From]),
     case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Pid, PState}) of
         ok ->
             case gen_server:call({?PROCESES_DAEMON, Target}, {start_proc, Pid}) of
-				ok -> {reply, ok, State#pms_state{migrated= State#pms_state.migrated ++ [Pid]}};
-				_ -> 
-					%%TODO log problem
+				ok -> {reply, ok, State};
+				Result -> 
+					?INFO_MSG("cannot start prepared process ~p", [Result]),
 					gen_server:call({?PROCESES_DAEMON, Target}, {clean_up, Pid}),
-					{reply, false, State}
+					{reply, {error, cannot_start}, State}
 			end;
-        _ ->
-            %%TODO log problem
-            {reply, false, State}
+        Result ->
+            ?INFO_MSG("Cannot prepare process ~p", [Result]),
+            {reply, {error, cannot_prepare}, State}
     end;
+
+handle_call({send, _Pid, PState, _Target}, _From, State) ->
+	?INFO_MSG("incorrect PState type, should be record mproc_state, get ~p", [PState]),
+	{reply, {error, state_type_error}, State};
+
 handle_call({prepare_proc, Pid, PState}, From, State) ->
-    ?INFO("prepareing proc ~p", [Pid]),
-    Reply = ok,
-    {reply, Reply, State};
+    ?INFO_MSG("prepareing proc ~p from ~p", [Pid, From]),
+	case proplists:get_value(Pid, State#pms_state.prepared) of
+		undefined ->
+			M = PState#mproc_state.module,
+			S = PState#mproc_state.state,
+			Listener = apply(M, init_state, [S]),
+		    {reply, ok, State#pms_state{migrated= State#pms_state.prepared ++ [{Pid, Listener}]}};
+		_ ->
+			{reply, {error, already_prepared}, State}
+	end;
+
 handle_call({start_proc, Pid}, From, State) ->
-    ?INFO("starting proc ~p", [Pid]),
+    ?INFO_MSG("starting proc ~p", [Pid]),
     Reply = ok,
     {reply, Reply, State};
+
 handle_call(Request, From, State) ->
     io:format("unrecognized request ~p from ~p~n", [Request, From]),
     Reply = false,
