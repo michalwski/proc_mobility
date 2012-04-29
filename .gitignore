@@ -4,3 +4,4 @@
 *.swp
 ebin/*
 deps/*
+gproc_dist*

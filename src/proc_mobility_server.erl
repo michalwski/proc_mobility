@@ -120,9 +120,9 @@ handle_call({started, Listener}, From, State) ->
 			{reply, {errpr, notstarting}, State};
 		{Caller, Proc, Module} ->
 			?INFO_MSG("proc ~p started, give response to caller ~p", [Proc, Caller]),
+			gproc:unregister_name({n,g,Proc}),
+			?INFO_MSG("new registration = ~p ~n ", [apply(Module, register,[])]),
 			gen_server:reply(Caller, ok),
-			gproc:unregister_name(Proc),
-			apply(Module, register,[]),
 			{reply, ok, State#pms_state{starting = proplists:delete(Listener, State#pms_state.starting)}}
 	end;
 

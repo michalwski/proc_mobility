@@ -16,23 +16,24 @@
 %%
 %% Exported Functions
 %%
--export([send/2, started/2, migrate/3, register_name/2, unregister_name/1, whereis_name/1]).
+-export([send/2, started/1, migrate/3, register_name/2, unregister_name/1, whereis_name/1]).
 
 %%
 %% API Functions
 %%
 migrate(Proc, PState, Target) ->
     gen_server:call(?PROCESES_DAEMON, {send, Proc, PState, Target}).
-started(Proc, Caller) ->
-	gen_server:call(?PROCESES_DAEMON, {started, Proc, Caller}).
+started(Listener) ->
+	gen_server:call(?PROCESES_DAEMON, {started, Listener}).
 send(Proc, Msg) ->
 	gproc:send({n,g,Proc}, Msg).
 whereis_name(Proc) ->
-	gproc:whereis_name(Proc).
+	gproc:whereis_name({n, g, Proc}).
 register_name(Name, Pid) when Pid == self() ->
+	?INFO_MSG("registering name ~p for pid ~p", [Name, Pid]),
 	gproc:add_global_name(Name).
 unregister_name(Name) ->
-	gproc:unregister_name(Name).
+	gproc:unregister_name({n, g, Name}).
 
 
 

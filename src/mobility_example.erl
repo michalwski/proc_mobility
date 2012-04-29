@@ -96,8 +96,8 @@ handle_call({mobility, send_me, Destination}, From, State) ->
 	end;
 
 handle_call({mobility, register}, From, State) ->
-	proc_mobility:register_name(?MODULE, self()),
-	{reply, ok, State};
+	Reply = proc_mobility:register_name(?MODULE, self()),
+	{reply, Reply, State};
 
 handle_call(Request, From, State) ->
     Reply = ok,
