@@ -16,12 +16,11 @@
 -export([]).
 
 %% mobile_proc callbacks
--export([init_state/1, send_me/1]).
+-export([init_state/1, send_me/1, register/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(state, {}).
 
 -export([start/0]).
 %% ====================================================================
@@ -29,7 +28,9 @@
 %% ====================================================================
 
 start() ->
-	gen_server:start({local, ?MODULE}, ?MODULE, [], []).
+	Status = gen_server:start({local, ?MODULE}, ?MODULE, [], []),
+	register(),
+	Status.
 
 start_with_state(State) ->
 	gen_server:start({local, ?MODULE}, ?MODULE, {mobility, State}, []).
@@ -42,10 +43,10 @@ init_state(State) ->
 	RunListener = fun() ->
 		?INFO_MSG("Running listener ~p", self()),
 		receive
-			{mobility, run, Caller, Pid} ->
+			{mobility, run} ->
 				Status = start_with_state(State),
 				?INFO_MSG("started with state ~p and got ~p", [State, Status]),
-				proc_mobility_server:started(Pid, Caller)
+				proc_mobility:started(self())
 		end,
 		?INFO_MSG("Listern finished")
 	end,
@@ -54,6 +55,8 @@ init_state(State) ->
 send_me(Destination) ->
 	gen_server:call(?MODULE, {mobility, send_me, Destination}).
 
+register() ->
+	gen_server:call(?MODULE, {mobility, register}).
 %% ====================================================================
 %% Server functions
 %% ====================================================================
@@ -71,6 +74,7 @@ init([]) ->
     {ok, {ala, ma, kota}};
 
 init({mobility, State}) ->
+	?INFO_MSG("Init with state ~p", [State]),
 	{ok, State}.
 %% --------------------------------------------------------------------
 %% Function: handle_call/3
@@ -84,13 +88,17 @@ init({mobility, State}) ->
 %% --------------------------------------------------------------------
 
 handle_call({mobility, send_me, Destination}, From, State) ->
-	case proc_mobility_server:send(?MODULE, #mproc_state{module=?MODULE, state=State}, Destination) of
+	case proc_mobility:migrate(?MODULE, #mproc_state{module=?MODULE, state=State}, Destination) of
 		ok ->
 			{stop, migrated, ok, State};
 		Result -> 
 			{reply, Result, State}
 	end;
-	
+
+handle_call({mobility, register}, From, State) ->
+	proc_mobility:register_name(?MODULE, self()),
+	{reply, ok, State};
+
 handle_call(Request, From, State) ->
     Reply = ok,
     {reply, Reply, State}.

@@ -1,12 +1,14 @@
 {application, proc_mobility,
  [
-  {description, ""},
-  {vsn, "1"},
+  {description, "Process mobility"},
+  {vsn, git},
+  {id, "proc_mobility"},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib,
-                  sasl
+                  sasl,
+                  gproc
                  ]},
   {mod, { proc_mobility_app, []}},
   {env, []}

@@ -3,3 +3,4 @@
 *.dump
 *.swp
 ebin/*
+deps/*
