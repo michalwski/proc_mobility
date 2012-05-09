@@ -69,11 +69,13 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({send, Proc, PState, Target}, From, State) when is_record(PState, mproc_state) ->
+	ModuleCode = code:get_object_code(PState#mproc_state.module),
     ?INFO_MSG("send request Proc ~p to ~p with ~p from ~p~n", [Proc, Target, PState, From]),
-    case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Proc, PState}) of
+    case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Proc, PState#mproc_state{code = ModuleCode}}) of
         ok ->
             case gen_server:call({?PROCESES_DAEMON, Target}, {start_proc, Proc}) of
-				ok -> {reply, ok, State};
+				ok ->
+					{reply, ok, State};
 				Result -> 
 					?INFO_MSG("cannot start prepared process ~p", [Result]),
 					gen_server:call({?PROCESES_DAEMON, Target}, {clean_up, Proc}),
@@ -94,6 +96,13 @@ handle_call({prepare_proc, Proc, PState}, From, State) ->
 		undefined ->
 			M = PState#mproc_state.module,
 			S = PState#mproc_state.state,
+			case PState#mproc_state.code of
+				{Module, Binary, Filename} ->
+					Loaded = code:load_binary(Module, Filename, Binary),
+					?INFO_MSG("code loading ~p~n", [Loaded]);
+				_ ->
+					ok
+			end,
 			?INFO_MSG("Preparing proces in module ~p with state ~p", [M, S]),
 			Listener = apply(M, init_state, [S]),
 			?INFO_MSG("Proces initiated, listener set ~p", [Listener]),
@@ -117,10 +126,9 @@ handle_call({started, Listener}, From, State) ->
 	?INFO_MSG("listener ~p stared new process from ~p", [Listener, From]),
 	case proplists:get_value(Listener, State#pms_state.starting) of
 		undefined -> 
-			{reply, {errpr, notstarting}, State};
+			{reply, {error, notstarting}, State};
 		{Caller, Proc, Module} ->
 			?INFO_MSG("proc ~p started, give response to caller ~p", [Proc, Caller]),
-			gproc:unregister_name({n,g,Proc}),
 			?INFO_MSG("new registration = ~p ~n ", [apply(Module, register,[])]),
 			gen_server:reply(Caller, ok),
 			{reply, ok, State#pms_state{starting = proplists:delete(Listener, State#pms_state.starting)}}

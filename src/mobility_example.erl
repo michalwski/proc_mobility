@@ -87,7 +87,7 @@ init({mobility, State}) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
 
-handle_call({mobility, send_me, Destination}, From, State) ->
+handle_call({mobility, send_me, Destination}, _From, State) ->
 	case proc_mobility:migrate(?MODULE, #mproc_state{module=?MODULE, state=State}, Destination) of
 		ok ->
 			{stop, migrated, ok, State};
@@ -95,12 +95,12 @@ handle_call({mobility, send_me, Destination}, From, State) ->
 			{reply, Result, State}
 	end;
 
-handle_call({mobility, register}, From, State) ->
+handle_call({mobility, register}, _From, State) ->
 	Reply = proc_mobility:register_name(?MODULE, self()),
 	{reply, Reply, State};
 
-handle_call(Request, From, State) ->
-    Reply = ok,
+handle_call(_Request, _From, State) ->
+    Reply = unknown,
     {reply, Reply, State}.
 
 %% --------------------------------------------------------------------
@@ -110,7 +110,7 @@ handle_call(Request, From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
-handle_cast(Msg, State) ->
+handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% --------------------------------------------------------------------
@@ -121,6 +121,7 @@ handle_cast(Msg, State) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
 handle_info(Info, State) ->
+	?INFO_MSG("got info ~p", [Info]),
     {noreply, State}.
 
 %% --------------------------------------------------------------------

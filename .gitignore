@@ -2,6 +2,6 @@
 .settings
 *.dump
 *.swp
-ebin/*
+ebin*/*
 deps/*
 gproc_dist*

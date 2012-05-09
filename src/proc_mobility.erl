@@ -26,14 +26,21 @@ migrate(Proc, PState, Target) ->
 started(Listener) ->
 	gen_server:call(?PROCESES_DAEMON, {started, Listener}).
 send(Proc, Msg) ->
-	gproc:send({n,g,Proc}, Msg).
+	gproc:send({p,g,Proc}, Msg).
 whereis_name(Proc) ->
-	gproc:whereis_name({n, g, Proc}).
+	case gproc:lookup_pids({p, g, Proc}) of
+		[] -> unknown;
+		List when is_list(List) ->
+			lists:last(List);
+		_ -> unknown
+	end.
+	
 register_name(Name, Pid) when Pid == self() ->
-	?INFO_MSG("registering name ~p for pid ~p", [Name, Pid]),
-	gproc:add_global_name(Name).
+	Result = gproc:reg({p,g,Name}),
+	?INFO_MSG("registering name ~p for pid ~p -> ~p~n", [Name, Pid, Result]),
+	Result.
 unregister_name(Name) ->
-	gproc:unregister_name({n, g, Name}).
+	gproc:unreg({p, g, Name}).
 
 
 

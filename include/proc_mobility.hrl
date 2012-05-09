@@ -1,7 +1,7 @@
 %%
 %%Mobile Proc State
 %%
--record(mproc_state, {module, function, state}).
+-record(mproc_state, {module, function, state, code=false}).
 
 -define(PROCESES_DAEMON, proc_mobility_daemon).
 -define(INFO_MSG(Msg, Args), error_logger:info_msg(Msg, Args)).
