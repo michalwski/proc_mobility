@@ -68,10 +68,9 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({send, Proc, PState, Target}, From, State) when is_record(PState, mproc_state) ->
-	ModuleCode = code:get_object_code(PState#mproc_state.module),
-    ?INFO_MSG("send request Proc ~p to ~p with ~p from ~p~n", [Proc, Target, PState, From]),
-    case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Proc, PState#mproc_state{code = ModuleCode}}) of
+handle_call({send, Proc, PState, Target}, _From, State) when is_record(PState, mproc_state) ->
+    ?INFO_MSG("send request Proc ~p to ~p ~n", [Proc, Target]),
+    case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Proc, PState}) of
         ok ->
             case gen_server:call({?PROCESES_DAEMON, Target}, {start_proc, Proc}) of
 				ok ->
@@ -96,13 +95,13 @@ handle_call({prepare_proc, Proc, PState}, From, State) ->
 		undefined ->
 			M = PState#mproc_state.module,
 			S = PState#mproc_state.state,
-			case PState#mproc_state.code of
-				{Module, Binary, Filename} ->
+			Each = fun({Module, Binary, Filename}) ->
 					Loaded = code:load_binary(Module, Filename, Binary),
-					?INFO_MSG("code loading ~p~n", [Loaded]);
-				_ ->
-					ok
-			end,
+					?INFO_MSG("code loading ~p~n", [Loaded])
+				end,
+			
+			lists:foreach(Each, PState#mproc_state.code),
+			
 			?INFO_MSG("Preparing proces in module ~p with state ~p", [M, S]),
 			Listener = apply(M, init_state, [S]),
 			?INFO_MSG("Proces initiated, listener set ~p", [Listener]),

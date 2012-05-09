@@ -88,9 +88,9 @@ init({mobility, State}) ->
 %% --------------------------------------------------------------------
 
 handle_call({mobility, send_me, Destination}, _From, State) ->
-	case proc_mobility:migrate(?MODULE, #mproc_state{module=?MODULE, state=State}, Destination) of
+	case proc_mobility:migrate(?MODULE, #mproc_state{module=?MODULE, state=State, code=[code:get_object_code(?MODULE)]}, Destination) of
 		ok ->
-			{stop, migrated, ok, State};
+			{stop, normal, ok, State};
 		Result -> 
 			{reply, Result, State}
 	end;
