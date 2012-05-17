@@ -7,6 +7,7 @@
 -module(mobility_example).
 
 -behaviour(gen_server).
+-behaviour(mobile_proc).
 %% --------------------------------------------------------------------
 %% Include files
 %% --------------------------------------------------------------------
@@ -90,6 +91,8 @@ init({mobility, State}) ->
 handle_call({mobility, send_me, Destination}, _From, State) ->
 	case proc_mobility:migrate(?MODULE, #mproc_state{module=?MODULE, state=State, code=[code:get_object_code(?MODULE)]}, Destination) of
 		ok ->
+%% 			timer:sleep(60000),
+%% 			?INFO_MSG("before die ~p~n", [erlang:process_info(self())]),
 			{stop, normal, ok, State};
 		Result -> 
 			{reply, Result, State}
@@ -100,6 +103,7 @@ handle_call({mobility, register}, _From, State) ->
 	{reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
+	?INFO_MSG("Unknown request ~p from ~p~n", [_Request, _From]),
     Reply = unknown,
     {reply, Reply, State}.
 

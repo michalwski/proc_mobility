@@ -5,3 +5,4 @@
 ebin*/*
 deps/*
 gproc_dist*
+rebar
