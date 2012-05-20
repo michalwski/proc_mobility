@@ -68,16 +68,16 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({send, Proc, PState, Target}, _From, State) when is_record(PState, mproc_state) ->
+handle_call({send, Proc, PState, Target, TransportLayer}, _From, State) when is_record(PState, mproc_state) ->
     ?INFO_MSG("send request Proc ~p to ~p ~n", [Proc, Target]),
-    case gen_server:call({?PROCESES_DAEMON, Target}, {prepare_proc, Proc, PState}) of
+    case TransportLayer:call(Target, {prepare_proc, Proc, PState}) of
         ok ->
-            case gen_server:call({?PROCESES_DAEMON, Target}, {start_proc, Proc}) of
+            case TransportLayer:call(Target, {start_proc, Proc}) of
 				ok ->
 					{reply, ok, State};
 				Result -> 
 					?INFO_MSG("cannot start prepared process ~p", [Result]),
-					gen_server:call({?PROCESES_DAEMON, Target}, {clean_up, Proc}),
+					TransportLayer:call(Target, {clean_up, Proc}),
 					{reply, {error, cannot_start}, State}
 			end;
         Result ->
