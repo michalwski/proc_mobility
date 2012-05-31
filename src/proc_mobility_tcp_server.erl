@@ -70,10 +70,13 @@ handle_message(Sock) ->
 	ok = inet:setopts(Sock, [{active, once}]),
 	receive
 		{tcp, Socket, Data} ->
-			handle_message(Socket, Data);
+			handle_message(Socket, binary_to_term(Data));
 		{tcp_closed, _Socket} ->
 			?INFO_MSG("Client Disconected")
 	end.
-			
+
+handle_message(Sock, {proc_daemon, Message}) ->
+	DaemonReply = gen_server:call(?PROCESSES_DAEMON, Message),
+	gen_tcp:send(Sock, term_to_binary(DaemonReply));
 handle_message(Sock, Message) ->
 	?INFO_MSG("Message ~p from Sock ~p", [Message, Sock]).

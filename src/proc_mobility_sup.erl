@@ -32,7 +32,8 @@ init([]) ->
 	io:format("Port to use ~p~n", [Port]),
 	{ok, { {one_for_one, 5, 10}, [
 								  ?CHILD(proc_mobility_server, proc_mobility_server, worker, []),
-								  ?CHILD(proc_mobility_tcp_server, proc_mobility_tcp_server, worker, [Port])
+								  ?CHILD(proc_mobility_tcp_server, proc_mobility_tcp_server, worker, [Port]),
+								  ?CHILD(proc_mobility_tcp_client, proc_mobility_tcp_client, worker, [])
 								  
 								  ]}}.
 %%     {ok, { {one_for_one, 5, 10}, []} }.

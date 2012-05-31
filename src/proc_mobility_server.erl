@@ -34,7 +34,7 @@
 %% @end
 %%--------------------------------------------------------------------
 start_link() ->
-    gen_server:start_link({local, ?PROCESES_DAEMON}, ?MODULE, [], []).
+    gen_server:start_link({local, ?PROCESSES_DAEMON}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -107,7 +107,7 @@ handle_call({prepare_proc, Proc, PState}, From, State) ->
 			?INFO_MSG("Proces initiated, listener set ~p", [Listener]),
 		    {reply, ok, State#pms_state{prepared= State#pms_state.prepared ++ [{Proc, {Listener, M}}]}};
 		_ ->
-			{reply, {error, already_prepared}, State}
+			{reply, ok, State}
 	end;
 
 handle_call({start_proc, Proc}, From, State) ->

@@ -22,12 +22,12 @@
 %% API Functions
 %%
 migrate(Proc, PState, Target) when is_atom(Target) ->
-    gen_server:call(?PROCESES_DAEMON, {send, Proc, PState, {?PROCESES_DAEMON, Target}, gen_server});
+    gen_server:call(?PROCESSES_DAEMON, {send, Proc, PState, {?PROCESSES_DAEMON, Target}, gen_server});
 migrate(Proc, PState, {tcp, Host, Port}) ->
-	gen_server:call(?PROCESES_DAEMON, {send, Proc, PState, {Host, Port}, proc_mobility_tcp_client}).
+	gen_server:call(?PROCESSES_DAEMON, {send, Proc, PState, {Host, Port}, proc_mobility_tcp_client}).
 			
 started(Listener) ->
-	gen_server:call(?PROCESES_DAEMON, {started, Listener}).
+	gen_server:call(?PROCESSES_DAEMON, {started, Listener}).
 send(Proc, Msg) ->
 	gproc:send({p,g,Proc}, Msg).
 whereis_name(Proc) ->
