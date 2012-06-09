@@ -17,6 +17,7 @@
 %%
 
 -include("proc_mobility.hrl").
+-include("proc_logging.hrl").
 
 %%
 %% Exported Functions
@@ -78,5 +79,8 @@ handle_message(Sock) ->
 handle_message(Sock, {proc_daemon, Message}) ->
 	DaemonReply = gen_server:call(?PROCESSES_DAEMON, Message),
 	gen_tcp:send(Sock, term_to_binary(DaemonReply));
+handle_message(Sock, {proc_proxing, gen_call, Name, Request}) ->
+	ServerReply = gen_server:call(Name, Request),
+	gen_tcp:send(Sock, term_to_binary(ServerReply));
 handle_message(Sock, Message) ->
 	?INFO_MSG("Message ~p from Sock ~p", [Message, Sock]).

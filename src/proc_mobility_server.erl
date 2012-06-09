@@ -22,6 +22,7 @@
          code_change/3]).
 
 -include("proc_mobility.hrl").
+-include("proc_logging.hrl").
 -record(pms_state, 
         {prepared=[], starting=[]}).
 

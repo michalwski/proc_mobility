@@ -13,6 +13,7 @@
 %% Include files
 %%
 -include("proc_mobility.hrl").
+-include("proc_logging.hrl").
 %%
 %% Exported Functions
 %%
