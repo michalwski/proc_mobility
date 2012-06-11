@@ -25,10 +25,7 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-	Port = case init:get_argument(m_tcp_port) of
-		{ok, [[Port0]]} -> list_to_integer(Port0);
-		_ -> 1805
-	end,
+	Port = proc_mobility:get_tcp_server_port(),
 	io:format("Port to use ~p~n", [Port]),
 	{ok, { {one_for_one, 5, 10}, [
 								  ?CHILD(proc_mobility_server, proc_mobility_server, worker, []),

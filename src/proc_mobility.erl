@@ -17,7 +17,7 @@
 %%
 %% Exported Functions
 %%
--export([send/2, started/1, migrate/3, register_name/2, unregister_name/1, whereis_name/1]).
+-export([send/2, started/1, migrate/3, register_name/2, unregister_name/1, whereis_name/1, get_tcp_server_port/0]).
 
 %%
 %% API Functions
@@ -46,6 +46,11 @@ register_name(Name, Pid) when Pid == self() ->
 unregister_name(Name) ->
 	gproc:unreg({p, g, Name}).
 
+get_tcp_server_port() ->
+	case init:get_argument(m_tcp_port) of
+		{ok, [[Port0]]} -> list_to_integer(Port0);
+		_ -> 1805
+	end.
 
 
 %%

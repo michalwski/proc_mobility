@@ -51,6 +51,9 @@ send_me(Destination) ->
 
 register() ->
 	gen_server:call(?MODULE, {mobility, register}).
+
+get_code() ->
+	[code:get_object_code(?MODULE)].
 %% ====================================================================
 %% Server functions
 %% ====================================================================

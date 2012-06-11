@@ -10,12 +10,15 @@
 %%
 %% Callbacks
 %%
-%% -callback get_state() -> State::term().
 -callback init_state(State::term()) ->
    ok.
+
 -callback send_me(Destination::term()) ->
 	ok | {error, Reason::term()}.
+
 -callback register() -> ok.
+
+-callback get_code() -> [binary()].
 %%
 %% API Functions
 %%

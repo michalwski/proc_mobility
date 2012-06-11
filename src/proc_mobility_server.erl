@@ -79,9 +79,12 @@ handle_call({send, _Proc, PState, _Target}, _From, State) ->
 
 handle_call({move_proc, Proc, PState}, From, State) ->
     ?INFO_MSG("Prepareing proc ~p from ~p", [Proc, From]),
-	spawn(fun() -> gen_server:reply(From, prepare_and_run(PState)) end),
+	spawn(fun() -> gen_server:reply(From, prepare_and_run(From, PState)) end),
     {noreply, State};
-
+handle_call({get_code, Module}, From, State) ->
+	?INFO_MSG("Request for code for module ~p from ~p", [Module, From]),
+	spawn(fun() -> gen_server:reply(From, get_code(Module)) end),
+	{noreply, State};
 
 handle_call(Request, From, State) ->
     io:format("unrecognized request ~p from ~p~n", [Request, From]),
@@ -153,7 +156,7 @@ move_proc(TransportLayer, Proc, PState, Target) ->
 			{error, cannot_start}
     end.
 
-prepare_and_run(PState) ->
+prepare_and_run({Pid, _Tag}, PState) ->
 	M = PState#mproc_state.module,
 	S = PState#mproc_state.state,
 	Each = fun({Module, Binary, Filename}) ->
@@ -164,11 +167,57 @@ prepare_and_run(PState) ->
 	lists:foreach(Each, PState#mproc_state.code),
 	
 	?INFO_MSG("Preparing proces in module ~p with state ~p", [M, S]),
-	case apply(M, init_state, [S]) of
+	try
+		run_proc(M, S)
+	catch
+		throw:Term ->
+			?ERROR_MSG("Cannot run new proc becouse of throw ~p", [Term]),
+			{throw, Term};
+		exit:Reason ->
+			?ERROR_MSG("Cannot run new proc becouse of exit ~p", [Reason]),
+			{exit, Reason};
+		error:undef ->
+			LocalNode = node(),
+			case code:is_loaded(M) of
+				false ->
+					Addr = case node(Pid) of
+						LocalNode -> %%Pid is from local node and module is not loaded
+							{?PROCESSES_TCP_CLIENT};	
+						Node -> {?PROCESSES_DAEMON, Node}
+					end,
+					?INFO_MSG("Need code for module ~p from ~p", [M, Pid]),
+					Code = gen_server:call(Addr, {get_code, M}),
+					lists:foreach(Each, Code),
+					try
+						run_proc(M, S)
+					catch
+						Class:Reason ->
+							?ERROR_MSG("Cannot run proc after code loading ~p:~p~n~p", [Class, Reason, erlang:get_stacktrace()]),
+							{Class, Reason}
+					end;
+				Other ->
+					{error, undef}
+			end;
+		error:Reason ->
+			?ERROR_MSG("Cannot run new proc ~p ~n~p", [Reason, erlang:get_stacktrace()]),
+			{error, Reason}
+	end.
+
+run_proc(Module, State) ->
+	case apply(Module, init_state, [State]) of
 		ok ->
-			apply(M, register, []),
+			apply(Module, register, []),
 			ok;
 		Error ->
 			?ERROR_MSG("Cannot initiate process ~p", [Error]),
 			Error
+	end.
+
+get_code(Module) ->
+	try
+		[Module:get_code()]
+	catch
+		error:undef ->
+			?WARN_MSG("module ~p does not define function get_code, try to get code for the module", [Module]),
+			[code:get_object_code(Module)]
 	end.
