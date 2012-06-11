@@ -71,7 +71,8 @@ handle_message(Sock) ->
 	ok = inet:setopts(Sock, [{active, once}]),
 	receive
 		{tcp, Socket, Data} ->
-			handle_message(Socket, binary_to_term(Data));
+			handle_message(Socket, binary_to_term(Data)),
+			handle_message(Sock);
 		{tcp_closed, _Socket} ->
 			?INFO_MSG("Client Disconected")
 	end.
@@ -82,5 +83,7 @@ handle_message(Sock, {proc_daemon, Message}) ->
 handle_message(Sock, {proc_proxing, gen_call, Name, Request}) ->
 	ServerReply = gen_server:call(Name, Request),
 	gen_tcp:send(Sock, term_to_binary(ServerReply));
+handle_message(_Sock, {proc_proxing, gen_cast, Name, Request}) ->
+	gen_server:cast(Name, Request);
 handle_message(Sock, Message) ->
 	?INFO_MSG("Message ~p from Sock ~p", [Message, Sock]).

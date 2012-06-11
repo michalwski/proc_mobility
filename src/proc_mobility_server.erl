@@ -69,70 +69,19 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({send, Proc, PState, Target, TransportLayer}, _From, State) when is_record(PState, mproc_state) ->
-    ?INFO_MSG("send request Proc ~p to ~p ~n", [Proc, Target]),
-    case TransportLayer:call(Target, {prepare_proc, Proc, PState}) of
-        ok ->
-            case TransportLayer:call(Target, {start_proc, Proc}) of
-				ok ->
-					{reply, ok, State};
-				Result -> 
-					?INFO_MSG("cannot start prepared process ~p", [Result]),
-					TransportLayer:call(Target, {clean_up, Proc}),
-					{reply, {error, cannot_start}, State}
-			end;
-        Result ->
-            ?INFO_MSG("Cannot prepare process ~p", [Result]),
-            {reply, {error, cannot_prepare}, State}
-    end;
+handle_call({send, Proc, PState, Target, TransportLayer}, From, State) when is_record(PState, mproc_state) ->
+	spawn(fun() -> gen_server:reply(From, move_proc(TransportLayer, Proc, PState, Target)) end),
+    {noreply, State};
 
 handle_call({send, _Proc, PState, _Target}, _From, State) ->
 	?INFO_MSG("incorrect PState type, should be record mproc_state, get ~p", [PState]),
 	{reply, {error, state_type_error}, State};
 
-handle_call({prepare_proc, Proc, PState}, From, State) ->
+handle_call({move_proc, Proc, PState}, From, State) ->
     ?INFO_MSG("Prepareing proc ~p from ~p", [Proc, From]),
-	case proplists:get_value(Proc, State#pms_state.prepared) of
-		undefined ->
-			M = PState#mproc_state.module,
-			S = PState#mproc_state.state,
-			Each = fun({Module, Binary, Filename}) ->
-					Loaded = code:load_binary(Module, Filename, Binary),
-					?INFO_MSG("code loading ~p~n", [Loaded])
-				end,
-			
-			lists:foreach(Each, PState#mproc_state.code),
-			
-			?INFO_MSG("Preparing proces in module ~p with state ~p", [M, S]),
-			Listener = apply(M, init_state, [S]),
-			?INFO_MSG("Proces initiated, listener set ~p", [Listener]),
-		    {reply, ok, State#pms_state{prepared= State#pms_state.prepared ++ [{Proc, {Listener, M}}]}};
-		_ ->
-			{reply, ok, State}
-	end;
+	spawn(fun() -> gen_server:reply(From, prepare_and_run(PState)) end),
+    {noreply, State};
 
-handle_call({start_proc, Proc}, From, State) ->
-    ?INFO_MSG("Starting proc ~p", [Proc]),
-	case proplists:get_value(Proc, State#pms_state.prepared) of
-		undefined ->
-			{reply, {error, unprepared}, State};
-		{Listener, Module} ->
-			?INFO_MSG("Running prepared proc ~p ~p", [Listener, From]),
-			run_prepared(Listener),
-			{noreply, State#pms_state{starting = State#pms_state.starting ++ [{Listener, {From, Proc, Module}}], prepared = proplists:delete(Proc, State#pms_state.prepared)}}
-	end;
-
-handle_call({started, Listener}, From, State) ->
-	?INFO_MSG("listener ~p stared new process from ~p", [Listener, From]),
-	case proplists:get_value(Listener, State#pms_state.starting) of
-		undefined -> 
-			{reply, {error, notstarting}, State};
-		{Caller, Proc, Module} ->
-			?INFO_MSG("proc ~p started, give response to caller ~p", [Proc, Caller]),
-			?INFO_MSG("new registration = ~p ~n ", [apply(Module, register,[])]),
-			gen_server:reply(Caller, ok),
-			{reply, ok, State#pms_state{starting = proplists:delete(Listener, State#pms_state.starting)}}
-	end;
 
 handle_call(Request, From, State) ->
     io:format("unrecognized request ~p from ~p~n", [Request, From]),
@@ -194,5 +143,32 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-run_prepared(Listener) ->
-	Listener ! {mobility, run}.
+move_proc(TransportLayer, Proc, PState, Target) ->
+	?INFO_MSG("send request Proc ~p to ~p ~n", [Proc, Target]),
+    case TransportLayer:call(Target, {move_proc, Proc, PState}) of
+        ok ->
+			ok;
+		Result -> 
+			?INFO_MSG("cannot start process ~p on ~p", [Result, Target]),
+			{error, cannot_start}
+    end.
+
+prepare_and_run(PState) ->
+	M = PState#mproc_state.module,
+	S = PState#mproc_state.state,
+	Each = fun({Module, Binary, Filename}) ->
+			Loaded = code:load_binary(Module, Filename, Binary),
+			?INFO_MSG("code loading ~p~n", [Loaded])
+		end,
+	
+	lists:foreach(Each, PState#mproc_state.code),
+	
+	?INFO_MSG("Preparing proces in module ~p with state ~p", [M, S]),
+	case apply(M, init_state, [S]) of
+		ok ->
+			apply(M, register, []),
+			ok;
+		Error ->
+			?ERROR_MSG("Cannot initiate process ~p", [Error]),
+			Error
+	end.

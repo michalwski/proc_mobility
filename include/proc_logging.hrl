@@ -1,4 +1,5 @@
--define(INFO_MSG(Msg, Args), error_logger:info_msg(Msg, Args)).
+-define(INFO_MSG(Msg, Args), error_logger:info_msg(?MAKE_FORMAT(Msg), Args)).
 -define(INFO_MSG(Msg), error_logger:info_msg(Msg)).
--define(ERROR_MSG(Msg, Args), error_logger:error_msg(Msg, Args)).
+-define(ERROR_MSG(Msg, Args), error_logger:error_msg(?MAKE_FORMAT(Msg), Args)).
 -define(ERROR_MSG(Msg), error_logger:error_msg(Msg)).
+-define(MAKE_FORMAT(Msg), lists:flatten(io_lib:format("~p ~p:~p -> ~s ~n", [self(), ?MODULE, ?LINE, Msg]))).

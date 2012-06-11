@@ -28,7 +28,7 @@
 start_link() ->
 	gen_server:start_link({local, ?PROCESSES_TCP_CLIENT}, ?MODULE, [], []).
 
-call(Target, {start_proc, Proc} = Message) ->
+call(Target, {move_proc, Proc} = Message) ->
 	?INFO_MSG("Message ~p", [Message]),
 	case gen_call(Target, Message) of
 		ok ->
@@ -107,8 +107,10 @@ handle_call(Request, _From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
-
-handle_cast(_Msg, State) ->
+handle_cast({register, Proc, Target}, State) ->
+	proc_proxy_sup:start_proxy(Proc, Target),
+	{noreply, State};
+handle_cast(Msg, State) ->
 	{noreply, State}.
 
 %% --------------------------------------------------------------------

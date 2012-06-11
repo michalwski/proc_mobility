@@ -42,17 +42,9 @@ start_with_state(State) ->
 %% ====================================================================
 
 init_state(State) ->
-	RunListener = fun() ->
-		?INFO_MSG("Running listener ~p", self()),
-		receive
-			{mobility, run} ->
-				Status = start_with_state(State),
-				?INFO_MSG("started with state ~p and got ~p", [State, Status]),
-				proc_mobility:started(self())
-		end,
-		?INFO_MSG("Listern finished")
-	end,
-	spawn(RunListener).
+	{ok, _Pid} = start_with_state(State),
+	ok.
+	
 
 send_me(Destination) ->
 	gen_server:call(?MODULE, {mobility, send_me, Destination}).
@@ -95,6 +87,7 @@ handle_call({mobility, send_me, Destination}, _From, State) ->
 		ok ->
 %% 			timer:sleep(60000),
 %% 			?INFO_MSG("before die ~p~n", [erlang:process_info(self())]),
+			%%TODO forward msgs if you want
 			{stop, normal, ok, State};
 		Result -> 
 			{reply, Result, State}

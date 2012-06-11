@@ -67,6 +67,7 @@ handle_call(Request, From, State) ->
 %% --------------------------------------------------------------------
 handle_cast(Msg, State) ->
 	?INFO_MSG("Handle cast ~p", [Msg]),
+	spawn(fun() -> redirect_cast(Msg, State) end),
     {noreply, State}.
 
 %% --------------------------------------------------------------------
@@ -78,6 +79,7 @@ handle_cast(Msg, State) ->
 %% --------------------------------------------------------------------
 handle_info(Info, State) ->
 	?INFO_MSG("Handle info ~p", [Info]),
+	spawn(fun() -> redirect_cast(Info, State) end),
     {noreply, State}.
 
 %% --------------------------------------------------------------------
@@ -93,7 +95,7 @@ terminate(Reason, State) ->
 %% Purpose: Convert process state when code is changed
 %% Returns: {ok, NewState}
 %% --------------------------------------------------------------------
-code_change(OldVsn, State, Extra) ->
+code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %% --------------------------------------------------------------------
@@ -115,3 +117,9 @@ redirect_call(Request, From, #state{name=Name, host=Host, port=Port}) ->
 			gen_server:reply(From, Error)
 	end,
 	ok = gen_tcp:close(Socket).
+
+redirect_cast(Msg, #state{name=Name, host=Host, port=Port}) ->
+	{ok, Socket} = gen_tcp:connect(Host, Port, [binary, {packet, 0}]),
+	ok = gen_tcp:send(Socket, term_to_binary({proc_proxing, gen_cast, Name, Msg})),
+	ok = gen_tcp:close(Socket).
+	
