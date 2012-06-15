@@ -9,7 +9,7 @@
                    {active,    false},
                    {backlog,   10},
                    {nodelay,   true},
-                   {packet,    raw},
+                   {packet,    4},
                    {reuseaddr, true}]).
 
 %%
@@ -19,6 +19,7 @@
 -include("proc_mobility.hrl").
 -include("proc_logging.hrl").
 
+-record(tcp_server_state, {clients}).
 %%
 %% Exported Functions
 %%
@@ -38,18 +39,33 @@
 %%
 
 start_link(Port) ->
-	gen_listener_tcp:start_link({local, ?MODULE}, ?MODULE, [Port], []).
+	gen_listener_tcp:start_link({local, ?PROCESSES_TCP_SERVER}, ?MODULE, [Port], []).
 
 init([Port]) ->
-	{ok, {Port, ?TCP_OPTS}, nil}.
+	{ok, {Port, ?TCP_OPTS}, #tcp_server_state{clients=dict:new()}}.
 
 handle_accept(Sock, State) ->
 	Pid = spawn(fun() -> handle_message(Sock) end),
 	gen_tcp:controlling_process(Sock, Pid),
 	{noreply, State}.
 
+handle_call({get_code, PName}, From, State) ->
+	case dict:find(PName, State#tcp_server_state.clients) of
+		{ok, Home} ->
+			?INFO_MSG("need to contact with ~p to get ~p code", [Home, PName]),
+			spawn(fun() -> get_code(PName, Home, From) end),
+			{noreply, State};
+		_ ->
+			?ERROR_MSG("unknown destination for ~p", [PName]),
+			{reply, {error, unknown_home}}
+	end;
+
 handle_call(Request, _From, State) ->
     {reply, {illegal_request, Request}, State}.
+
+handle_cast({proc_home, PName, {{ok,{Host,_}},Port}}, State) ->
+	?INFO_MSG("store home ~p for ~p", [{Host, Port}, PName]),
+	{noreply, State#tcp_server_state{clients = dict:store(PName, {Host,Port}, State#tcp_server_state.clients)}};
 
 handle_cast(_Request, State) ->
     {noreply, State}.
@@ -77,13 +93,27 @@ handle_message(Sock) ->
 			?INFO_MSG("Client Disconected")
 	end.
 
-handle_message(Sock, {proc_daemon, Message}) ->
-	DaemonReply = gen_server:call(?PROCESSES_DAEMON, Message),
-	gen_tcp:send(Sock, term_to_binary(DaemonReply));
+handle_message(Sock, {proc_daemon, ServerPort, {move_proc, #mproc_state{name=PName}} = Message}) ->
+	gen_server:cast(?PROCESSES_TCP_SERVER, {proc_home, PName, {inet:peername(Sock), ServerPort}}),
+	pass_proc_deamon_call(Sock, Message);
+
+handle_message(Sock, {proc_daemon, _ServerPort, Message}) ->
+	pass_proc_deamon_call(Sock, Message);
+
 handle_message(Sock, {proc_proxing, gen_call, Name, Request}) ->
 	ServerReply = gen_server:call(Name, Request),
 	gen_tcp:send(Sock, term_to_binary(ServerReply));
+
 handle_message(_Sock, {proc_proxing, gen_cast, Name, Request}) ->
 	gen_server:cast(Name, Request);
+
 handle_message(Sock, Message) ->
 	?INFO_MSG("Message ~p from Sock ~p", [Message, Sock]).
+
+pass_proc_deamon_call(Sock, Message) ->
+	?INFO_MSG("call to deamon ~p", [Message]),
+	DaemonReply = gen_server:call(?PROCESSES_DAEMON, Message),
+	gen_tcp:send(Sock, term_to_binary(DaemonReply)).
+
+get_code(PName, Home, From) ->
+	proc_mobility_utils:tcp_send_recv_reply(Home, {proc_daemon, proc_mobility:get_tcp_server_port(), {get_code, PName}}, From).

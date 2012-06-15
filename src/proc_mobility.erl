@@ -17,15 +17,15 @@
 %%
 %% Exported Functions
 %%
--export([send/2, started/1, migrate/3, register_name/2, unregister_name/1, whereis_name/1, get_tcp_server_port/0]).
+-export([send/2, started/1, migrate/2, register_name/2, unregister_name/1, whereis_name/1, get_tcp_server_port/0]).
 
 %%
 %% API Functions
 %%
-migrate(Proc, PState, Target) when is_atom(Target) ->
-    gen_server:call(?PROCESSES_DAEMON, {send, Proc, PState, {?PROCESSES_DAEMON, Target}, gen_server});
-migrate(Proc, PState, {tcp, Host, Port}) ->
-	gen_server:call(?PROCESSES_DAEMON, {send, Proc, PState, {Host, Port}, proc_mobility_tcp_client}).
+migrate(PState, Target) when is_atom(Target) ->
+    gen_server:call(?PROCESSES_DAEMON, {send, PState, {?PROCESSES_DAEMON, Target}, gen_server});
+migrate(PState, {tcp, Host, Port}) ->
+	gen_server:call(?PROCESSES_DAEMON, {send, PState, {Host, Port}, proc_mobility_tcp_client}).
 			
 started(Listener) ->
 	gen_server:call(?PROCESSES_DAEMON, {started, Listener}).

@@ -41,7 +41,7 @@ call(Target, Message) ->
 	gen_call(Target, Message).
 
 gen_call(Target, Message) ->
-	gen_server:call(?PROCESSES_TCP_CLIENT, {Target, {proc_daemon, Message}}).
+	gen_server:call(?PROCESSES_TCP_CLIENT, {Target, {proc_daemon, proc_mobility:get_tcp_server_port(), Message}}).
 
 %% ====================================================================
 %% Server functions
@@ -69,26 +69,9 @@ init([]) ->
 %%          {stop, Reason, Reply, State}   | (terminate/2 is called)
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
-handle_call({{Host, Port}, Message}, From, State) ->
+handle_call({ {_,_} = Target, Message}, From, State) ->
 	spawn(fun() ->
-				  case gen_tcp:connect(Host, Port, [binary, {packet, 0}]) of
-					  {ok, Socket} ->
-						  ok = gen_tcp:send(Socket, term_to_binary(Message)),
-						  ok = inet:setopts(Socket, [{active, once}]),
-						  receive
-							  {tcp, Socket, Bin} ->
-								  ?INFO_MSG("Got ~p from socket ~p", [binary_to_term(Bin), Socket]),
-								  gen_server:reply(From, binary_to_term(Bin));
-							  {tcp_closed, Socket} ->
-								  ?INFO_MSG("socket ~p closed", [Socket]);
-							  {Error} ->
-								  error_logger:error_msg("Got error ~p from socket ~p", [Error, Socket]),
-								  gen_server:reply(From, Error)
-						  end,
-						  ok = gen_tcp:close(Socket);
-					  Error ->
-						  gen_server:reply(From, Error)
-				  end	
+				  proc_mobility_utils:tcp_send_recv_reply(Target, Message, From)
 		  end),
 	
 	{noreply, State};

@@ -24,7 +24,7 @@
 -include("proc_mobility.hrl").
 -include("proc_logging.hrl").
 -record(pms_state, 
-        {prepared=[], starting=[]}).
+        {moving, starting}).
 
 
 %%--------------------------------------------------------------------
@@ -53,7 +53,7 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    {ok, #pms_state{}}.
+    {ok, #pms_state{moving=dict:new(), starting=dict:new()}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -69,25 +69,37 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({send, Proc, PState, Target, TransportLayer}, From, State) when is_record(PState, mproc_state) ->
-	spawn(fun() -> gen_server:reply(From, move_proc(TransportLayer, Proc, PState, Target)) end),
-    {noreply, State};
+handle_call({send, #mproc_state{name=Proc} = PState, Target, TransportLayer}, From, State) when is_record(PState, mproc_state) ->
+	case dict:is_key(Proc, State#pms_state.moving) of
+		true ->
+			{reply, already_moving, State};
+		_ ->
+			spawn(fun() -> gen_server:reply(From, move_proc(TransportLayer, PState, Target)) end),
+    		{noreply, State#pms_state{moving = dict:store(Proc, PState, State#pms_state.moving)}}
+	end;
 
-handle_call({send, _Proc, PState, _Target}, _From, State) ->
+handle_call({send, PState, _Target}, _From, State) ->
 	?INFO_MSG("incorrect PState type, should be record mproc_state, get ~p", [PState]),
 	{reply, {error, state_type_error}, State};
 
-handle_call({move_proc, Proc, PState}, From, State) ->
+handle_call({move_proc, #mproc_state{name=Proc} = PState}, From, State) ->
     ?INFO_MSG("Prepareing proc ~p from ~p", [Proc, From]),
 	spawn(fun() -> gen_server:reply(From, prepare_and_run(From, PState)) end),
     {noreply, State};
-handle_call({get_code, Module}, From, State) ->
-	?INFO_MSG("Request for code for module ~p from ~p", [Module, From]),
-	spawn(fun() -> gen_server:reply(From, get_code(Module)) end),
-	{noreply, State};
+
+handle_call({get_code, PName}, From, State) ->
+	case dict:find(PName, State#pms_state.moving) of
+		error ->
+			?ERROR_MSG("Request for code for proc ~p which is not moving", [PName]),
+			{reply, {error, no_such_starting_process}, State};
+		{ok, #mproc_state{module=Module}} ->
+			?INFO_MSG("Request for code for module ~p from ~p", [Module, From]),
+			spawn(fun() -> gen_server:reply(From, get_code(Module)) end),
+			{noreply, State}
+	end;
 
 handle_call(Request, From, State) ->
-    io:format("unrecognized request ~p from ~p~n", [Request, From]),
+    ?INFO_MSG("unrecognized request ~p from ~p~n", [Request, From]),
     Reply = false,
     {reply, Reply, State}.
 
@@ -101,6 +113,38 @@ handle_call(Request, From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_cast({sent, PName}, State) ->
+	case dict:is_key(PName, State#pms_state.moving) of
+		false ->
+			{noreply, State};
+		_ ->
+			{noreply, State#pms_state{moving = dict:erase(PName, State#pms_state.moving)}}
+	end;
+
+handle_cast({not_sent, PName}, State) ->
+	case dict:is_key(PName, State#pms_state.moving) of
+		false ->
+			{noreply, State};
+		_ ->
+			{noreply, State#pms_state{moving = dict:erase(PName, State#pms_state.moving)}}
+	end;
+
+handle_cast({started, PName}, State) ->
+	case dict:is_key(PName, State#pms_state.starting) of
+		false ->
+			{noreply, State};
+		_ ->
+			{noreply, State#pms_state{starting = dict:erase(PName, State#pms_state.starting)}}
+	end;
+
+handle_cast({not_started, PName}, State) ->
+	case dict:is_key(PName, State#pms_state.starting) of
+		false ->
+			{noreply, State};
+		_ ->
+			{noreply, State#pms_state{starting = dict:erase(PName, State#pms_state.starting)}}
+	end;
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -146,13 +190,15 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-move_proc(TransportLayer, Proc, PState, Target) ->
+move_proc(TransportLayer, #mproc_state{name=Proc} = PState, Target) ->
 	?INFO_MSG("send request Proc ~p to ~p ~n", [Proc, Target]),
-    case TransportLayer:call(Target, {move_proc, Proc, PState}) of
+    case TransportLayer:call(Target, {move_proc, PState}) of
         ok ->
+			gen_server:cast(?PROCESSES_DAEMON, {started, Proc}),
 			ok;
-		Result -> 
-			?INFO_MSG("cannot start process ~p on ~p", [Result, Target]),
+		Error -> 
+			?INFO_MSG("cannot start process ~p on ~p", [Error, Target]),
+			gen_server:cast(?PROCESSES_DAEMON, {not_started, Proc}),
 			{error, cannot_start}
     end.
 
@@ -168,7 +214,7 @@ prepare_and_run({Pid, _Tag}, PState) ->
 	
 	?INFO_MSG("Preparing proces in module ~p with state ~p", [M, S]),
 	try
-		run_proc(M, S)
+		run_proc(M, PState)
 	catch
 		throw:Term ->
 			?ERROR_MSG("Cannot run new proc becouse of throw ~p", [Term]),
@@ -181,21 +227,21 @@ prepare_and_run({Pid, _Tag}, PState) ->
 			case code:is_loaded(M) of
 				false ->
 					Addr = case node(Pid) of
-						LocalNode -> %%Pid is from local node and module is not loaded
-							{?PROCESSES_TCP_CLIENT};	
+						LocalNode -> %%Pid is from local node and module is not loaded so it comes from tcp transport
+							?PROCESSES_TCP_SERVER;	
 						Node -> {?PROCESSES_DAEMON, Node}
 					end,
 					?INFO_MSG("Need code for module ~p from ~p", [M, Pid]),
-					Code = gen_server:call(Addr, {get_code, M}),
+					Code = gen_server:call(Addr, {get_code, PState#mproc_state.name}),
 					lists:foreach(Each, Code),
 					try
-						run_proc(M, S)
+						run_proc(M, PState)
 					catch
 						Class:Reason ->
 							?ERROR_MSG("Cannot run proc after code loading ~p:~p~n~p", [Class, Reason, erlang:get_stacktrace()]),
 							{Class, Reason}
 					end;
-				Other ->
+				_ ->
 					{error, undef}
 			end;
 		error:Reason ->
@@ -203,19 +249,21 @@ prepare_and_run({Pid, _Tag}, PState) ->
 			{error, Reason}
 	end.
 
-run_proc(Module, State) ->
-	case apply(Module, init_state, [State]) of
+run_proc(Module, PState) ->
+	case apply(Module, init_state, [PState#mproc_state.state]) of
 		ok ->
 			apply(Module, register, []),
+			gen_server:cast(?PROCESSES_DAEMON, {started, PState#mproc_state.name}),
 			ok;
 		Error ->
 			?ERROR_MSG("Cannot initiate process ~p", [Error]),
+			gen_server:cast(?PROCESSES_DAEMON, {not_started, PState#mproc_state.name}),
 			Error
 	end.
 
 get_code(Module) ->
 	try
-		[Module:get_code()]
+		Module:get_code()
 	catch
 		error:undef ->
 			?WARN_MSG("module ~p does not define function get_code, try to get code for the module", [Module]),

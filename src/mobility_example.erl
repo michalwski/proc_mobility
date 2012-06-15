@@ -86,7 +86,7 @@ init({mobility, State}) ->
 
 handle_call({mobility, send_me, Destination}, _From, State) ->
 %% 	code:get_object_code(?MODULE)
-	case proc_mobility:migrate(?MODULE, #mproc_state{module=?MODULE, state=State, code=[]}, Destination) of
+	case proc_mobility:migrate(#mproc_state{name=?MODULE, module=?MODULE, state=State, code=[]}, Destination) of
 		ok ->
 %% 			timer:sleep(60000),
 %% 			?INFO_MSG("before die ~p~n", [erlang:process_info(self())]),
