@@ -14,7 +14,7 @@
 %% --------------------------------------------------------------------
 %% External exports
 %% --------------------------------------------------------------------
--export([start_proxy/2, start_link/0]).
+-export([start_proxy/2, start_unnamed_proxy/2, start_link/0]).
 
 %% --------------------------------------------------------------------
 %% Internal exports
@@ -40,6 +40,8 @@ start_link() ->
 
 start_proxy(Proc, Target) ->
 	supervisor:start_child(?SERVER, {Proc, {proc_proxy, start_link, [Proc, Target]}, transient, 100, worker, [proc_proxy]}).
+start_unnamed_proxy(Proc, Target) ->
+	supervisor:start_child(?SERVER, {Proc, {proc_proxy, start_unnamed_link, [Proc, Target]}, temporary, 100, worker, [proc_proxy]}).
 
 %% ====================================================================
 %% Server functions

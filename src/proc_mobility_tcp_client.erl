@@ -91,7 +91,7 @@ handle_call(Request, _From, State) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
 handle_cast({register, Proc, Target}, State) ->
-	proc_proxy_sup:start_proxy(Proc, Target),
+	proc_proxy_sup:start_proxy(Proc#mproc_state.name, Target),
 	{noreply, State};
 handle_cast(Msg, State) ->
 	{noreply, State}.

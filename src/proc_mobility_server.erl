@@ -74,7 +74,16 @@ handle_call({send, #mproc_state{name=Proc} = PState, Target, TransportLayer}, Fr
 		true ->
 			{reply, already_moving, State};
 		_ ->
-			spawn(fun() -> gen_server:reply(From, move_proc(TransportLayer, PState, Target)) end),
+			spawn(fun() -> 
+                        Reply = case move_proc(TransportLayer, PState, Target) of
+                            ok ->
+                                {Pid, _ } = From,
+                                spawn(fun() -> forward_messages(erlang:process_info(Pid, messages), Proc) end),
+                                ok;
+                            R -> R
+                        end,
+                        gen_server:reply(From, Reply) 
+                end),
     		{noreply, State#pms_state{moving = dict:store(Proc, PState, State#pms_state.moving)}}
 	end;
 
@@ -189,6 +198,12 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+forward_messages({messages, Msgs}, Proc) -> forward_messages1(Msgs, Proc).
+forward_messages1([], _) -> ok;
+forward_messages1([Msg | Msgs], Proc) ->
+    proc_mobility:send(Proc, Msg),
+    forward_messages1(Msgs, Proc).
+
 
 move_proc(TransportLayer, #mproc_state{name=Proc} = PState, Target) ->
 	?INFO_MSG("send request Proc ~p to ~p ~n", [Proc, Target]),

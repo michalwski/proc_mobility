@@ -25,12 +25,16 @@
 
 
 -export([start/0]).
+
+-record(state, {pings=0,msgs=0,casts=0}).
+
 %% ====================================================================
 %% External functions
 %% ====================================================================
 
 start() ->
 	Status = gen_server:start({local, ?MODULE}, ?MODULE, [], []),
+	spawn(fun() -> pinger() end),
 	register(),
 	Status.
 
@@ -47,7 +51,13 @@ init_state(State) ->
 	
 
 send_me(Destination) ->
-	gen_server:call(?MODULE, {mobility, send_me, Destination}).
+    Pid = proc_mobility:whereis_name(?MODULE),
+    spawn(fun() -> io:format("response ~p~n", [gen_server:call(?MODULE, {mobility, send_me, Destination})]) end),
+    timer:sleep(50),
+    Pid ! msg,
+    gen_server:cast(Pid, ucast),
+    spawn(fun() -> gen_server:call(Pid, call) end),
+    Pid ! msg.
 
 register() ->
 	gen_server:call(?MODULE, {mobility, register}).
@@ -68,7 +78,7 @@ get_code() ->
 %% --------------------------------------------------------------------
 init([]) ->
 	?INFO_MSG("Starting"),
-    {ok, {ala, ma, kota}};
+    {ok, #state{}};
 
 init({mobility, State}) ->
 	?INFO_MSG("Init with state ~p", [State]),
@@ -88,8 +98,8 @@ handle_call({mobility, send_me, Destination}, _From, State) ->
 %% 	code:get_object_code(?MODULE)
 	case proc_mobility:migrate(#mproc_state{name=?MODULE, module=?MODULE, state=State, code=[]}, Destination) of
 		ok ->
-%% 			timer:sleep(60000),
-%% 			?INFO_MSG("before die ~p~n", [erlang:process_info(self())]),
+			%%timer:sleep(60000),
+			%%?INFO_MSG("before die~p~n ~p~n", [self(),erlang:process_info(self())]),
 			%%TODO forward msgs if you want
 			{stop, normal, ok, State};
 		Result -> 
@@ -99,6 +109,10 @@ handle_call({mobility, send_me, Destination}, _From, State) ->
 handle_call({mobility, register}, _From, State) ->
 	Reply = proc_mobility:register_name(?MODULE, self()),
 	{reply, Reply, State};
+
+handle_call(ping, _From, State) ->
+	%%?INFO_MSG("ping number ~p", [State#state.pings]),
+	{reply, pong, State#state{pings=(State#state.pings + 1)}};
 
 handle_call(_Request, _From, State) ->
 	?INFO_MSG("Unknown request ~p from ~p~n", [_Request, _From]),
@@ -113,7 +127,8 @@ handle_call(_Request, _From, State) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
 handle_cast(_Msg, State) ->
-    {noreply, State}.
+	?INFO_MSG("got cast request number ~p",[State#state.casts]),
+    {noreply, State#state{casts=State#state.casts+1}}.
 
 %% --------------------------------------------------------------------
 %% Function: handle_info/2
@@ -123,8 +138,8 @@ handle_cast(_Msg, State) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
 handle_info(Info, State) ->
-	?INFO_MSG("got info ~p", [Info]),
-    {noreply, State}.
+	?INFO_MSG("got info ~p, number ~p", [Info, State#state.msgs]),
+    {noreply, State#state{msgs=State#state.msgs+1}}.
 
 %% --------------------------------------------------------------------
 %% Function: terminate/2
@@ -147,3 +162,14 @@ code_change(OldVsn, State, Extra) ->
 %%% Internal functions
 %% --------------------------------------------------------------------
 
+pinger() ->
+	receive
+		after 5000 -> 
+			%%io:format("sending ping to ~p~n", [?MODULE]),
+			gen_server:call({via, proc_mobility, ?MODULE}, ping)
+%% 			timer:sleep(1000),
+%% 			gen_server:cast({via, proc_mobility, ?MODULE}, ping_cast),
+%% 			timer:sleep(1000),
+%% 			proc_mobility:whereis_name(?MODULE) ! ping_info 
+	end,
+	pinger().
