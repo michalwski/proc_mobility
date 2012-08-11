@@ -23,7 +23,7 @@
 %% API Functions
 %%
 migrate(PState, Target) when is_atom(Target) ->
-    gen_server:call(?PROCESSES_DAEMON, {send, PState, {?PROCESSES_DAEMON, Target}, gen_server});
+    gen_server:call(?PROCESSES_DAEMON, {send, PState, {?PROCESSES_DAEMON, Target}, proc_mobility_server});
 migrate(PState, {tcp, Host, Port}) ->
 	gen_server:call(?PROCESSES_DAEMON, {send, PState, {Host, Port}, proc_mobility_tcp_client}).
 			

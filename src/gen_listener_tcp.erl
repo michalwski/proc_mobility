@@ -100,7 +100,7 @@ init([{'__gen_listener_tcp_mod', Module} | InitArgs]) ->
         {ok, {Port, Options}, ModState} ->
             {ok, ListenSocket} = gen_tcp:listen(Port, Options),
 
-            error_logger:info_report([listening_started, {port, Port}, {lsock, ListenSocket} | Options]), 
+            %%error_logger:info_report([listening_started, {port, Port}, {lsock, ListenSocket} | Options]), 
 
             {ok, create_acceptor(ListenSocket, Module, ModState)};
         ignore ->
@@ -149,7 +149,7 @@ handle_info({inet_async, LSock, ARef, {ok, ClientSock}}, #listener_state{socket=
     error_logger:info_report([new_connection, {csock, ClientSock}, {lsock, LSock}, {async_ref, ARef}]),
     patch_client_socket(ClientSock, LSock),
 
-    error_logger:info_report([handling_accept, {module, Module}, {module_state, ModState}]),
+    %%error_logger:info_report([handling_accept, {module, Module}, {module_state, ModState}]),
 
     try
         case Module:handle_accept(ClientSock, ModState) of
@@ -186,7 +186,7 @@ handle_info(Info, #listener_state{mod=Module, mod_state=ModState}=St) ->
     end.
 
 terminate(Reason, #listener_state{mod=Module, mod_state=ModState}=St) ->
-    error_logger:info_report([listener_terminating, {reason, Reason}]),
+    %%error_logger:info_report([listener_terminating, {reason, Reason}]),
     gen_tcp:close(St#listener_state.socket),
     Module:terminate(Reason, ModState).
 
@@ -210,5 +210,5 @@ create_acceptor(St) when is_record(St, listener_state) ->
 create_acceptor(ListenSocket, Module, ModState) when is_port(ListenSocket) ->
     {ok, Ref} = prim_inet:async_accept(ListenSocket, -1), 
 
-    error_logger:info_report(waiting_for_connection), 
+    %%error_logger:info_report(waiting_for_connection), 
     #listener_state{socket=ListenSocket, acceptor=Ref, mod=Module, mod_state=ModState}.

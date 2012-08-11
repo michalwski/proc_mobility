@@ -53,10 +53,10 @@ init_state(State) ->
 send_me(Destination) ->
     Pid = proc_mobility:whereis_name(?MODULE),
     spawn(fun() -> io:format("response ~p~n", [gen_server:call(?MODULE, {mobility, send_me, Destination})]) end),
-    timer:sleep(50),
+    timer:sleep(100),
     Pid ! msg,
     gen_server:cast(Pid, ucast),
-    spawn(fun() -> gen_server:call(Pid, call) end),
+    spawn_link(fun() -> ?INFO_MSG("aaaaaaaaaaaaaa~n", []), ?INFO_MSG("Resp ~p~n", [gen_server:call(Pid, call)]), ?INFO_MSG("bbbbbbbb~n",[]) end),
     Pid ! msg.
 
 register() ->
@@ -95,12 +95,8 @@ init({mobility, State}) ->
 %% --------------------------------------------------------------------
 
 handle_call({mobility, send_me, Destination}, _From, State) ->
-%% 	code:get_object_code(?MODULE)
 	case proc_mobility:migrate(#mproc_state{name=?MODULE, module=?MODULE, state=State, code=[]}, Destination) of
 		ok ->
-			%%timer:sleep(60000),
-			%%?INFO_MSG("before die~p~n ~p~n", [self(),erlang:process_info(self())]),
-			%%TODO forward msgs if you want
 			{stop, normal, ok, State};
 		Result -> 
 			{reply, Result, State}

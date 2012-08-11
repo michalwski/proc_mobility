@@ -14,7 +14,7 @@
    ok.
 
 -callback send_me(Destination::term()) ->
-	ok | {error, Reason::term()}.
+    ok | {error, Reason::term()}.
 
 -callback register() -> ok.
 

@@ -7,6 +7,7 @@
 -module(proc_mobility_tcp_client).
 
 -behaviour(gen_server).
+-behaviour(proc_mobility_transport).
 %% --------------------------------------------------------------------
 %% Include files
 %% --------------------------------------------------------------------
@@ -14,10 +15,13 @@
 -include("proc_logging.hrl").
 %% --------------------------------------------------------------------
 %% External exports
--export([start_link/0, call/2]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+
+%% transport layer callbacks
+-export([call/2, forward_messages/3, redirect_call/4, redirect_cast/3]).
 
 -record(pp_state, {}).
 
@@ -28,20 +32,6 @@
 start_link() ->
 	gen_server:start_link({local, ?PROCESSES_TCP_CLIENT}, ?MODULE, [], []).
 
-call(Target, {move_proc, Proc} = Message) ->
-	?INFO_MSG("Message ~p", [Message]),
-	case gen_call(Target, Message) of
-		ok ->
-			%%need to register new process
-			gen_server:cast(?PROCESSES_TCP_CLIENT, {register, Proc, Target}),
-			ok;
-		Any -> Any
-	end;
-call(Target, Message) ->
-	gen_call(Target, Message).
-
-gen_call(Target, Message) ->
-	gen_server:call(?PROCESSES_TCP_CLIENT, {Target, {proc_daemon, proc_mobility:get_tcp_server_port(), Message}}).
 
 %% ====================================================================
 %% Server functions
@@ -69,12 +59,17 @@ init([]) ->
 %%          {stop, Reason, Reply, State}   | (terminate/2 is called)
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
+handle_call({register, Proc, Target}, _From, State) ->
+    proc_proxy_sup:start_proxy(Proc, Target, ?MODULE),
+    {reply, ok, State};
+
 handle_call({ {_,_} = Target, Message}, From, State) ->
-	spawn(fun() ->
-				  proc_mobility_utils:tcp_send_recv_reply(Target, Message, From)
-		  end),
-	
-	{noreply, State};
+    spawn(fun() ->
+                proc_mobility_utils:tcp_send_recv_reply(Target, Message, From)
+        end),
+
+    {noreply, State};
+
 
 
 handle_call(Request, _From, State) ->
@@ -90,10 +85,7 @@ handle_call(Request, _From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
-handle_cast({register, Proc, Target}, State) ->
-	proc_proxy_sup:start_proxy(Proc#mproc_state.name, Target),
-	{noreply, State};
-handle_cast(Msg, State) ->
+handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 %% --------------------------------------------------------------------
@@ -103,7 +95,7 @@ handle_cast(Msg, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
-handle_info(Info, State) ->
+handle_info(_Info, State) ->
 	{noreply, State}.
 
 %% --------------------------------------------------------------------
@@ -111,7 +103,7 @@ handle_info(Info, State) ->
 %% Description: Shutdown the server
 %% Returns: any (ignored by gen_server)
 %% --------------------------------------------------------------------
-terminate(Reason, State) ->
+terminate(_Reason, _State) ->
 	ok.
 
 %% --------------------------------------------------------------------
@@ -119,10 +111,41 @@ terminate(Reason, State) ->
 %% Purpose: Convert process state when code is changed
 %% Returns: {ok, NewState}
 %% --------------------------------------------------------------------
-code_change(OldVsn, State, Extra) ->
+code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+%% --------------------------------------------------------------------
+%% Transport Layer Functions
+%% --------------------------------------------------------------------
+call(Target, Message) ->
+    gen_call(Target, Message).
+
+forward_messages(Msgs, PName, Target) ->
+    gen_server:call(?PROCESSES_TCP_CLIENT, {register, PName, Target}),
+    forward_messages0(Msgs, PName).
+
+redirect_call(Name, Request, From, {Host, Port}) ->
+    proc_mobility_utils:tcp_send_recv_reply({Host, Port},
+                                            {proc_proxing, gen_call, Name, Request},
+                                            From).
+
+redirect_cast(Name, Msg, {Host, Port}) ->
+    proc_mobility_utils:tcp_send({Host, Port}, {proc_proxing, gen_cast, Name, Msg}).
 
 %% --------------------------------------------------------------------
 %%% Internal functions
 %% --------------------------------------------------------------------
 
+gen_call(Target, Message) ->
+    gen_server:call(?PROCESSES_TCP_CLIENT, {Target, {proc_daemon, proc_mobility:get_tcp_server_port(), Message}}).
+
+forward_messages0(undefined, _) -> ok;
+forward_messages0({messages, []}, _) -> ok;
+forward_messages0({messages, Msgs}, PName) ->
+    forward_messages0(Msgs, PName);
+forward_messages0([], _) -> 
+    timer:sleep(50),
+    ok;
+forward_messages0([Msg | Msgs], Proc) ->
+    proc_mobility:send(Proc, Msg),
+    forward_messages0(Msgs, Proc).

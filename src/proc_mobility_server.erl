@@ -9,6 +9,7 @@
 -module(proc_mobility_server).
 
 -behaviour(gen_server).
+-behaviour(proc_mobility_transport).
 
 %% API
 -export([start_link/0]).
@@ -20,6 +21,9 @@
          handle_info/2,
          terminate/2,
          code_change/3]).
+
+%% for transport layer
+-export([forward_messages/3, call/2, redirect_call/4, redirect_cast/3]).
 
 -include("proc_mobility.hrl").
 -include("proc_logging.hrl").
@@ -70,22 +74,22 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({send, #mproc_state{name=Proc} = PState, Target, TransportLayer}, From, State) when is_record(PState, mproc_state) ->
-	case dict:is_key(Proc, State#pms_state.moving) of
-		true ->
-			{reply, already_moving, State};
-		_ ->
-			spawn(fun() -> 
+    case dict:is_key(Proc, State#pms_state.moving) of
+        true ->
+            {reply, already_moving, State};
+        _ ->
+            spawn(fun() -> 
                         Reply = case move_proc(TransportLayer, PState, Target) of
                             ok ->
                                 {Pid, _ } = From,
-                                spawn(fun() -> forward_messages(erlang:process_info(Pid, messages), Proc) end),
+                                TransportLayer:forward_messages(erlang:process_info(Pid, messages), Proc, Target),
                                 ok;
                             R -> R
                         end,
                         gen_server:reply(From, Reply) 
                 end),
-    		{noreply, State#pms_state{moving = dict:store(Proc, PState, State#pms_state.moving)}}
-	end;
+            {noreply, State#pms_state{moving = dict:store(Proc, PState, State#pms_state.moving)}}
+    end;
 
 handle_call({send, PState, _Target}, _From, State) ->
 	?INFO_MSG("incorrect PState type, should be record mproc_state, get ~p", [PState]),
@@ -195,13 +199,38 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+%%%==================================================================
+%%% Transport Layer API
+%%%==================================================================
+call(Target, Message) ->
+    gen_server:call(Target, Message).
+
+forward_messages(undefinded, _, _ ) -> ok;
+forward_messages({messages, []}, _, _) -> ok;
+forward_messages({messages, Msgs}, PName, {_, Target}) ->
+    {ok, Pid} = proc_proxy_sup:start_unnamed_proxy(PName, Target, ?MODULE),
+    ?INFO_MSG("forwarding messages ~p", [Msgs]),
+    forward_messages1(Msgs, Pid).
+
+redirect_call(Name, Request, {Pid, _} = From, Target) ->
+    Reply = gen_server:call({Name, Target}, Request),
+    ?INFO_MSG("reply ~p to ~p which is ~p", [Reply, From, erlang:process_info(Pid, status)]),
+    gen_server:reply(From, Reply).
+
+redirect_cast(Name, Cast, Target) ->
+    ?INFO_MSG("redirect cast to ~p on ~p", [Name, Target]),
+    {Name, Target} ! Cast.
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-forward_messages({messages, Msgs}, Proc) -> forward_messages1(Msgs, Proc).
-forward_messages1([], _) -> ok;
+
+forward_messages1([], Pid) -> 
+    timer:sleep(50), %%to ensure that all eventual reply msgs will be send before stop msg
+    gen_server:cast(Pid, prox_mobility_proxy_stop),
+    ok;
 forward_messages1([Msg | Msgs], Proc) ->
-    proc_mobility:send(Proc, Msg),
+    Proc ! Msg,
     forward_messages1(Msgs, Proc).
 
 
