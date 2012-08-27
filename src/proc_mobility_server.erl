@@ -296,7 +296,7 @@ prepare_and_run({Pid, _Tag}, PState) ->
 run_proc(Module, PState) ->
 	case apply(Module, init_state, [PState#mproc_state.state]) of
 		ok ->
-			apply(Module, register, []),
+			%%apply(Module, register, []),
 			gen_server:cast(?PROCESSES_DAEMON, {started, PState#mproc_state.name}),
 			ok;
 		Error ->
