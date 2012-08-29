@@ -14,7 +14,7 @@
 %% --------------------------------------------------------------------
 %% External exports
 %% --------------------------------------------------------------------
--export([start_proxy/3, start_unnamed_proxy/3, start_link/0]).
+-export([start_proxy/3, start_unnamed_proxy/3, start_link/0, stop_proxy/1]).
 
 %% --------------------------------------------------------------------
 %% Internal exports
@@ -43,6 +43,8 @@ start_proxy(Proc, Target, Transport) ->
 start_unnamed_proxy(Proc, Target, Transport) ->
     supervisor:start_child(?SERVER, {Proc, {proc_proxy, start_unnamed_link, [Proc, Target, Transport]}, temporary, 100, worker, [proc_proxy]}).
 
+stop_proxy(Pid) ->
+    gen_server:cast(Pid, proc_mobility_proxy_stop).
 %% ====================================================================
 %% Server functions
 %% ====================================================================

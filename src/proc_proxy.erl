@@ -71,7 +71,7 @@ handle_call(Request, From, #state{name=Name, target=Target, transport=Transport}
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
-handle_cast(prox_mobility_proxy_stop, State) ->
+handle_cast(proc_mobility_proxy_stop, State) ->
     {stop, normal, State};
 handle_cast(Msg, #state{name=Name, target=Target, transport=Transport} = State) ->
     spawn(fun() -> Transport:redirect_cast(Name, Msg, Target) end),

@@ -226,7 +226,7 @@ redirect_cast(Name, Cast, Target) ->
 %%%===================================================================
 
 forward_messages1([], Pid) -> 
-    timer:sleep(50), %%to ensure that all eventual reply msgs will be send before stop msg
+    timer:sleep(50), %%to ensure that all eventually forwared msgs will be send before stop msg
     gen_server:cast(Pid, prox_mobility_proxy_stop),
     ok;
 forward_messages1([Msg | Msgs], Proc) ->

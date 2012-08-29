@@ -88,12 +88,12 @@ handle_info({'DOWN', Ref, process, _Pid, normal}, #tcp_server_state{monitors = M
         _Pid -> 
             gen_server:cast(?PROCESSES_TCP_SERVER, {proc_monitor, PName})
     end,
-    State#tcp_server_state{monitors = dict:erase(Ref, Monitors)};
+    {noreply, State#tcp_server_state{monitors = dict:erase(Ref, Monitors)}};
 handle_info({'DOWN', Ref, process, _Pid, Reason}, #tcp_server_state{monitors = Monitors, clients = Clients} = State) -> %%there is possiblity that proccess was migrated
     PName = dict:fetch(Ref, Monitors),
     Addr = dict:fetch(PName, Clients),
     notify_process_terminated(PName, Reason, Addr),
-    State#tcp_server_state{monitors = dict:erase(Ref, Monitors)};
+    {noreply, State#tcp_server_state{monitors = dict:erase(Ref, Monitors)}};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -107,8 +107,8 @@ code_change(_OldVsn, State, _Extra) ->
 %% Local Functions
 %%
 
-notify_process_terminated(PName, Reason, {Host, Port}) ->
-    ok.
+notify_process_terminated(PName, Reason, Addr) ->
+    proc_mobility_utils:tcp_send(Addr, {proc_proxing, stopped, PName, Reason}).
 
 handle_message(Sock) ->
 	ok = inet:setopts(Sock, [{active, once}]),
@@ -142,13 +142,21 @@ handle_message(Sock, {proc_proxing, is_alive, Name}) ->
     end,
     gen_tcp:send(Sock, term_to_binary(Response));
 
+handle_message(_Sock, {proc_proxing, stopped, PName, Reason}) ->
+    ?INFO_MSG("Remote process ~p stopped becouse of ~p", [PName, Reason]),
+    case proc_mobility:whereis_name(PName) of
+        unknown -> ok;
+        Pid ->
+            proc_proxy_sup:stop_proxy(Pid)
+    end;
+
 handle_message(Sock, Message) ->
     ?INFO_MSG("Message ~p from Sock ~p", [Message, Sock]).
 
 pass_proc_deamon_call(Sock, Message) ->
-	?INFO_MSG("call to deamon ~p", [Message]),
-	DaemonReply = gen_server:call(?PROCESSES_DAEMON, Message),
-	gen_tcp:send(Sock, term_to_binary(DaemonReply)).
+    ?INFO_MSG("call to deamon ~p", [Message]),
+    DaemonReply = gen_server:call(?PROCESSES_DAEMON, Message),
+    gen_tcp:send(Sock, term_to_binary(DaemonReply)).
 
 get_code(PName, Home, From) ->
     proc_mobility_utils:tcp_send_recv_reply(Home, {proc_daemon, proc_mobility:get_tcp_server_port(), {get_code, PName}}, From).
