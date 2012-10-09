@@ -19,9 +19,15 @@
 %%
 -export([send/2, started/1, migrate/2, register_name/2, unregister_name/1, whereis_name/1, get_tcp_server_port/0]).
 
+-type destination() :: node() | {tcp, binary(), integer()}.
 %%
 %% API Functions
 %%
+
+%% @doc sends process to given destination
+%% Destination can be a node in erlang cluster
+%% or node outside the cluster but with proc_mobility_tcp_server started
+-spec migrate(term(), destination()) -> ok | {error, term()}.
 migrate(PState, Target) when is_atom(Target) ->
     gen_server:call(?PROCESSES_DAEMON, {send, PState, {?PROCESSES_DAEMON, Target}, proc_mobility_server});
 migrate(PState, {tcp, Host, Port}) ->
@@ -31,6 +37,8 @@ started(Listener) ->
 	gen_server:call(?PROCESSES_DAEMON, {started, Listener}).
 send(Proc, Msg) ->
 	gproc:send({p,g,Proc}, Msg).
+
+%% @doc Return pid of mobile process	
 whereis_name(Proc) ->
 	case gproc:lookup_pids({p, g, Proc}) of
 		[] -> unknown;
@@ -52,8 +60,4 @@ get_tcp_server_port() ->
 		_ -> 1805
 	end.
 
-
-%%
-%% Local Functions
-%%
 
