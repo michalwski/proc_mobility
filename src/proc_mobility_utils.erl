@@ -1,6 +1,10 @@
-%% Author: michal
-%% Created: 15-06-2012
-%% Description: TODO: Add description to proc_mobility_utils
+%%%-------------------------------------------------------------------
+%%% @author Michal Piotrowski <michalwski@gmail.com>
+%%% @copyright 2012 Michal Piotrowski
+%%% @doc
+%%% Additional function used by other modules. 
+%%% @end
+%%%-------------------------------------------------------------------
 -module(proc_mobility_utils).
 
 %%
@@ -15,6 +19,10 @@
 %%
 %% API Functions
 %%
+%% @doc
+%% Sends a message over TCP, waits for reply and replies to caller
+-spec tcp_send_recv_reply({inet:ip_address() | inet:hostname(), inet:port_number()},
+    any(), reference()) -> term().
 tcp_send_recv_reply({Host, Port}, Message, ToReply) ->
     case gen_tcp:connect(Host, Port, [binary, {packet, 4}]) of
         {ok, Socket} ->
@@ -34,6 +42,8 @@ tcp_send_recv_reply({Host, Port}, Message, ToReply) ->
         Error ->
             gen_server:reply(ToReply, Error)
     end.
+%% @doc Sends a message over TCP
+-spec tcp_send({inet:ip_address() | inet:hostname(), inet:port_number()}, any()) -> no_return().
 tcp_send({Host, Port}, Message) ->
     {ok, Socket} = gen_tcp:connect(Host, Port, [binary, {packet, 4}]),
     ok = gen_tcp:send(Socket, term_to_binary(Message)),

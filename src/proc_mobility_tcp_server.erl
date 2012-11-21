@@ -1,6 +1,11 @@
-%% Author: michal
-%% Created: 20-05-2012
-%% Description: TODO: Add description to proc_mobility_tcp_server
+%%%-------------------------------------------------------------------
+%%% @author Michal Piotrowski <michalwski@gmail.com>
+%%% @copyright 2012 Michal Piotrowski
+%%% @doc
+%%% TCP Server listing migration requests from nodes outside cluster. 
+%%% @end
+%%%-------------------------------------------------------------------
+
 -module(proc_mobility_tcp_server).
 
 -behaviour(gen_listener_tcp).
@@ -37,18 +42,22 @@
 %%
 %% API Functions
 %%
-
+%% @doc Starts TCP server on given port
+-spec start_link(integer()) -> {ok, pid()}.
 start_link(Port) ->
     gen_listener_tcp:start_link({local, ?PROCESSES_TCP_SERVER}, ?MODULE, [Port], []).
 
+%% gen_listener_tcp callbacks
+%% @private
 init([Port]) ->
     {ok, {Port, ?TCP_OPTS}, #tcp_server_state{clients=dict:new(), monitors=dict:new()}}.
 
+%% @private
 handle_accept(Sock, State) ->
 	Pid = spawn(fun() -> handle_message(Sock) end),
-	gen_tcp:controlling_process(Sock, Pid),
+	ok = gen_tcp:controlling_process(Sock, Pid),
 	{noreply, State}.
-
+%% @private
 handle_call({get_code, PName}, From, State) ->
 	case dict:find(PName, State#tcp_server_state.clients) of
 		{ok, Home} ->
@@ -63,6 +72,7 @@ handle_call({get_code, PName}, From, State) ->
 handle_call(Request, _From, State) ->
     {reply, {illegal_request, Request}, State}.
 
+%% @private
 handle_cast({proc_home, PName, {{ok,{Host,_}},Port}}, State) ->
     %%?INFO_MSG("store home ~p for ~p", [{Host, Port}, PName]),
     {noreply, State#tcp_server_state{clients = dict:store(PName, {Host,Port}, State#tcp_server_state.clients)}};
@@ -79,6 +89,7 @@ handle_cast({proc_monitor, PName}, #tcp_server_state{monitors = Monitors} = Stat
 handle_cast(_Request, State) ->
     {noreply, State}.
 
+%% @private
 handle_info({'DOWN', Ref, process, _Pid, normal}, #tcp_server_state{monitors = Monitors, clients = Clients} = State) -> %%there is possiblity that proccess was migrated
     PName = dict:fetch(Ref, Monitors),
     Addr = dict:fetch(PName, Clients),
@@ -89,6 +100,8 @@ handle_info({'DOWN', Ref, process, _Pid, normal}, #tcp_server_state{monitors = M
             gen_server:cast(?PROCESSES_TCP_SERVER, {proc_monitor, PName})
     end,
     {noreply, State#tcp_server_state{monitors = dict:erase(Ref, Monitors)}};
+
+%% @private
 handle_info({'DOWN', Ref, process, _Pid, Reason}, #tcp_server_state{monitors = Monitors, clients = Clients} = State) -> %%there is possiblity that proccess was migrated
     PName = dict:fetch(Ref, Monitors),
     Addr = dict:fetch(PName, Clients),
@@ -97,9 +110,11 @@ handle_info({'DOWN', Ref, process, _Pid, Reason}, #tcp_server_state{monitors = M
 handle_info(_Info, State) ->
     {noreply, State}.
 
+%% @private
 terminate(_Reason, _State) ->
     ok.
 
+%% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -114,7 +129,7 @@ handle_message(Sock) ->
 	ok = inet:setopts(Sock, [{active, once}]),
 	receive
 		{tcp, Socket, Data} ->
-			handle_message(Socket, binary_to_term(Data)),
+			ok = handle_message(Socket, binary_to_term(Data)),
 			handle_message(Sock);
 		{tcp_closed, _Socket} ->
 			?INFO_MSG("Client Disconected")
@@ -122,7 +137,7 @@ handle_message(Sock) ->
 
 handle_message(Sock, {proc_daemon, ServerPort, {move_proc, #mproc_state{name=PName}} = Message}) ->
     gen_server:cast(?PROCESSES_TCP_SERVER, {proc_home, PName, {inet:peername(Sock), ServerPort}}),
-    pass_proc_deamon_call(Sock, Message),
+    ok = pass_proc_deamon_call(Sock, Message),
     gen_server:cast(?PROCESSES_TCP_SERVER, {proc_monitor, PName});
 
 handle_message(Sock, {proc_daemon, _ServerPort, Message}) ->

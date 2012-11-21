@@ -1,9 +1,10 @@
-%%% -------------------------------------------------------------------
-%%% Author  : michal
-%%% Description :
-%%%
-%%% Created : 31-05-2012
-%%% -------------------------------------------------------------------
+%%%-------------------------------------------------------------------
+%%% @author Michal Piotrowski <michalwski@gmail.com>
+%%% @copyright 2012 Michal Piotrowski
+%%% @doc
+%%% Transport layer for migration outside the Erlang cluster. 
+%%% @end
+%%%-------------------------------------------------------------------
 -module(proc_mobility_tcp_client).
 
 -behaviour(gen_server).
@@ -23,12 +24,13 @@
 %% transport layer callbacks
 -export([call/2, forward_messages/3, redirect_call/4, redirect_cast/3]).
 
--record(pp_state, {}).
+-record(pp_state, {proc_proxy_pid}).
 
 %% ====================================================================
 %% External functions
 %% ====================================================================
 
+%% @doc Starts TCP transport layer
 start_link() ->
 	gen_server:start_link({local, ?PROCESSES_TCP_CLIENT}, ?MODULE, [], []).
 
@@ -38,6 +40,7 @@ start_link() ->
 %% ====================================================================
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: init/1
 %% Description: Initiates the server
 %% Returns: {ok, State}          |
@@ -46,10 +49,11 @@ start_link() ->
 %%          {stop, Reason}
 %% --------------------------------------------------------------------
 init([]) ->
-	proc_proxy_sup:start_link(),
-	{ok, #pp_state{}}.
+	{ok, Pid} = proc_proxy_sup:start_link(),
+	{ok, #pp_state{proc_proxy_pid=Pid}}.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: handle_call/3
 %% Description: Handling call messages
 %% Returns: {reply, Reply, State}          |
@@ -60,7 +64,7 @@ init([]) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
 handle_call({register, Proc, Target}, _From, State) ->
-    proc_proxy_sup:start_proxy(Proc, Target, ?MODULE),
+    {ok, _} = proc_proxy_sup:start_proxy(Proc, Target, ?MODULE),
     {reply, ok, State};
 
 handle_call({ {_,_} = Target, Message}, From, State) ->
@@ -79,6 +83,7 @@ handle_call(Request, _From, State) ->
 
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: handle_cast/2
 %% Description: Handling cast messages
 %% Returns: {noreply, State}          |
@@ -89,6 +94,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: handle_info/2
 %% Description: Handling all non call/cast messages
 %% Returns: {noreply, State}          |
@@ -99,6 +105,7 @@ handle_info(_Info, State) ->
 	{noreply, State}.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: terminate/2
 %% Description: Shutdown the server
 %% Returns: any (ignored by gen_server)
@@ -107,6 +114,7 @@ terminate(_Reason, _State) ->
 	ok.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Func: code_change/3
 %% Purpose: Convert process state when code is changed
 %% Returns: {ok, NewState}
@@ -117,18 +125,22 @@ code_change(_OldVsn, State, _Extra) ->
 %% --------------------------------------------------------------------
 %% Transport Layer Functions
 %% --------------------------------------------------------------------
+%% @doc Implements proc_mobility_transport:call(Target, Message)
+%% Connects with remote mobility server and sends process
 call(Target, Message) ->
     gen_call(Target, Message).
 
+%% @doc Forwards messages to migrated process over plain TCP
 forward_messages(Msgs, PName, Target) ->
     gen_server:call(?PROCESSES_TCP_CLIENT, {register, PName, Target}),
     forward_messages0(Msgs, PName).
 
+%% @doc Redirects call to migrated process over plain TCP
 redirect_call(Name, Request, From, {Host, Port}) ->
     proc_mobility_utils:tcp_send_recv_reply({Host, Port},
                                             {proc_proxing, gen_call, Name, Request},
                                             From).
-
+%% @doc Redirects cast to migrated process over plain TCP
 redirect_cast(Name, Msg, {Host, Port}) ->
     proc_mobility_utils:tcp_send({Host, Port}, {proc_proxing, gen_cast, Name, Msg}).
 

@@ -2,7 +2,7 @@
 %%% @author Michal Piotrowski <michalwski@gmail.com>
 %%% @copyright 2012 Michal Piotrowski
 %%% @doc
-%%%
+%%% Core module and process responsible for sending and starting mobile processes. 
 %%% @end
 %%%-------------------------------------------------------------------
 
@@ -202,9 +202,17 @@ code_change(_OldVsn, State, _Extra) ->
 %%%==================================================================
 %%% Transport Layer API
 %%%==================================================================
+
+%%% @doc Implements proc_mobility_transport:call(Target, Message)
+%%% In fact makes call on itself
+-spec call(term(), any()) -> ok | {error, any()}.
 call(Target, Message) ->
     gen_server:call(Target, Message).
 
+%%% @doc Forwards given messages to migrated process.
+%%% Should be used by migration mechanism to send messages queued during
+%%% process migration.
+-spec forward_messages(undefined | {messages, list()}, atom(), term()) -> no_return().
 forward_messages(undefinded, _, _ ) -> ok;
 forward_messages({messages, []}, _, _) -> ok;
 forward_messages({messages, Msgs}, PName, {_, Target}) ->
@@ -212,11 +220,16 @@ forward_messages({messages, Msgs}, PName, {_, Target}) ->
     ?INFO_MSG("forwarding messages ~p", [Msgs]),
     forward_messages1(Msgs, Pid).
 
+%%% @doc Redirects call to migrated process.
+%%% Used by proc_proxy.
+-spec redirect_call(atom(), any(), tuple(), tuple()) -> any().
 redirect_call(Name, Request, {Pid, _} = From, Target) ->
     Reply = gen_server:call({Name, Target}, Request),
     ?INFO_MSG("reply ~p to ~p which is ~p", [Reply, From, erlang:process_info(Pid, status)]),
     gen_server:reply(From, Reply).
-
+%%% @doc Redirects cast to migrated process.
+%%% Used by proc_proxy.
+-spec redirect_cast(atom(), term(), tuple()) -> no_return().
 redirect_cast(Name, Cast, Target) ->
     ?INFO_MSG("redirect cast to ~p on ~p", [Name, Target]),
     {Name, Target} ! Cast.

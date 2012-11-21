@@ -14,7 +14,6 @@
 	 multicall/3,
 	 multicall/4,
 	 cast/2,
-	 cast/3,
 	 abcast/2,
 	 abcast/3,
 	 reply/2
@@ -68,19 +67,16 @@ call(ServerRef, Request, Timeout) ->
     gen_server:call(ServerRef, Request, Timeout).
 
 multicall(Name, Request) ->
-    gen_server:multicall(Name, Request).
+    gen_server:multi_call(Name, Request).
 
 multicall(Nodes, Name, Request) ->
-    gen_server:multicall(Nodes, Name, Request).
+    gen_server:multi_call(Nodes, Name, Request).
 
 multicall(Nodes, Name, Request, Timeout) ->
-    gen_server:multicall(Nodes, Name, Request, Timeout).
+    gen_server:multi_call(Nodes, Name, Request, Timeout).
 
 cast(ServerRef, Request) ->
     gen_server:cast(ServerRef, Request).
-
-cast(ServerRef, Request, Timeout) ->
-    gen_server:cast(ServerRef, Request, Timeout).
 
 abcast(Name, Request) ->
     gen_server:abcast(Name, Request).

@@ -1,9 +1,12 @@
-%%% -------------------------------------------------------------------
-%%% Author  : michal
-%%% Description :
-%%%
-%%% Created : 09-06-2012
-%%% -------------------------------------------------------------------
+%%%-------------------------------------------------------------------
+%%% @author Michal Piotrowski <michalwski@gmail.com>
+%%% @copyright 2012 Michal Piotrowski
+%%% @doc
+%%% Mobile process proxy.
+%%% Used in forwarding messages to mobile process migrated outside cluster.
+%%% Is also used to forward messages queued during migration process.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(proc_proxy).
 
 -behaviour(gen_server).
@@ -24,9 +27,13 @@
 %% ====================================================================
 %% External functions
 %% ====================================================================
+%% @doc Starts named process proxy for processes migrated outside cluster.
+-spec start_link(atom(), tuple(), module()) -> {ok, pid()}.
 start_link(Proc, Target, TransportLayer) ->
     gen_server:start_link(?MODULE, [Proc, Target, true, TransportLayer], []).
 
+%% @doc Starts unnamed process proxy used only for forwarding queued messages
+-spec start_unnamed_link(atom(), tuple(), module()) -> {ok, pid()}.
 start_unnamed_link(Proc, Target, TransportLayer) ->
     gen_server:start_link(?MODULE, [Proc, Target, false, TransportLayer], []).
 
@@ -35,6 +42,7 @@ start_unnamed_link(Proc, Target, TransportLayer) ->
 %% ====================================================================
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: init/1
 %% Description: Initiates the server
 %% Returns: {ok, State}          |
@@ -51,6 +59,7 @@ init([PName, Target, Named, TransportLayer]) ->
     {ok, #state{name=PName, target = Target, transport=TransportLayer}}.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: handle_call/3
 %% Description: Handling call messages
 %% Returns: {reply, Reply, State}          |
@@ -65,6 +74,7 @@ handle_call(Request, From, #state{name=Name, target=Target, transport=Transport}
     {noreply, State}.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: handle_cast/2
 %% Description: Handling cast messages
 %% Returns: {noreply, State}          |
@@ -78,6 +88,7 @@ handle_cast(Msg, #state{name=Name, target=Target, transport=Transport} = State) 
     {noreply, State}.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: handle_info/2
 %% Description: Handling all non call/cast messages
 %% Returns: {noreply, State}          |
@@ -89,6 +100,7 @@ handle_info(Info, #state{name=Name, target=Target, transport=Transport} = State)
     {noreply, State}.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Function: terminate/2
 %% Description: Shutdown the server
 %% Returns: any (ignored by gen_server)
@@ -97,6 +109,7 @@ terminate(Reason, State) ->
     ok.
 
 %% --------------------------------------------------------------------
+%% @private
 %% Func: code_change/3
 %% Purpose: Convert process state when code is changed
 %% Returns: {ok, NewState}

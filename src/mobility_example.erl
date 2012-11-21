@@ -52,12 +52,7 @@ init_state(State) ->
 
 send_me(Destination) ->
     Pid = proc_mobility:whereis_name(?MODULE),
-    spawn(fun() -> io:format("response ~p~n", [gen_server:call(?MODULE, {mobility, send_me, Destination})]) end),
-    timer:sleep(100),
-    Pid ! msg,
-    gen_server:cast(Pid, ucast),
-    spawn_link(fun() -> ?INFO_MSG("aaaaaaaaaaaaaa~n", []), ?INFO_MSG("Resp ~p~n", [gen_server:call(Pid, call)]), ?INFO_MSG("bbbbbbbb~n",[]) end),
-    Pid ! msg.
+    gen_server:call(?MODULE, {mobility, send_me, Destination}).
 
 register() ->
 	gen_server:call(?MODULE, {mobility, register}).
